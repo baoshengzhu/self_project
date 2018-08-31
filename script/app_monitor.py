@@ -21,7 +21,7 @@ import traceback
 from kafka import KafkaProducer
 
 
-## log settings###### 
+## log settings######
 LOG_PATH_FILE = "./app_monitor_mgr.log"
 LOG_MODE = 'a'
 LOG_MAX_SIZE = 4*1024*1024 # 4M per file
@@ -104,7 +104,8 @@ def collect_status(pid):
                'cpu_count':cpu_count,'cpu_percent':cpu_percent,'num_fds':num_fds,'connections_num':connections_num,'appname':appname,'app_path':app_path,'children':children_list}
     return message
 
-def main( ):
+if __name__ == '__main__':
+
     parser = _argparse()
 
     ##kafka info###
@@ -128,20 +129,29 @@ def main( ):
 
     if not java_pid_list:
         sys.exit(0)
+    ##kafka info###
+    kafka_host='kafka4metric.huya.com'
+    kafka_port=7619
+    topic='ops_metric'
+    #kafka_host='10.64.42.217'
+    #kafka_port=9092
+    #topic='test-user-event-data'
+
+    try:
+        producer = KafkaProducer(bootstrap_servers=['{kafka_host}:{kafka_port}'.format(kafka_host=kafka_host,kafka_port=kafka_port)])
+    except:
+        logging.error('Error create producer in kafka: {}'.format(traceback.format_exc()))
+
     for pid in java_pid_list:
         pid=int(pid.strip())
-        message=collect_status(pid)
-        print message
+        try:
+            message=collect_status(pid)
+            print message
+        except:
+            logging.error('Error from collect_status: {}'.format(traceback.format_exc()))
         try:
             send_to_kafka(topic,message)
         except Exception as e:
             print e
     producer.flush()
-
-
-if __name__ == '__main__':
-    main()
-
-
-
 
