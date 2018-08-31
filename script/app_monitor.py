@@ -55,17 +55,19 @@ def get_host_ip():
         s.close()
     return ip
 
+#
 def _argparse():
     """
     argument parser
     """
     parser = argparse.ArgumentParser(description='health checker for application')
-    parser.add_argument('--type', action='store', dest='type', required=True,
+    parser.add_argument('--type', action='store',nargs='+' ,dest='type', required=True,
                         help='Monitoring type')
     return parser.parse_args()
 
+##A string of shell commands to be executed for obtain process pid
 def command(monitor_type):
-    cmd = "ps -eaf|grep %s|grep -v grep |grep -v 'yy.com'|awk '{print $2}'"%(monitor_type)
+    cmd = "ps -eaf|grep %s|grep -v grep |grep -v app_monitor|grep -v 'yy.com'|awk '{print $2}'"%(monitor_type)
     return cmd
 
 def collect_status(pid):
@@ -77,31 +79,35 @@ def collect_status(pid):
     pstatus=p_ins.status()
     memory_percent=p_ins.memory_percent()
     memory_used=memory_percent*physical_mem
-    cpu_percent=p_ins.cpu_percent()
+    cpu_calc_list = [ ]
+    for i in range(6):
+        cpu_calc=p_ins.cpu_percent(interval=0.1)
+        cpu_calc_list.append(cpu_calc)
+    cpu_percent=float(sum(cpu_calc_list)/len(cpu_calc_list))
     num_fds=p_ins.num_fds()
     connections=p_ins.connections()
     connections_num=len(connections)
     #appname=p_ins.cwd()
     if p_ins.name() == 'jsvc':
-        appname=p_ins.exe()
+        app_path=p_ins.exe().split('/')[:-2]
     else:
-        appname=p_ins.cwd()
+        app_path=p_ins.cwd()
+
+    appname = app_path.split('/')[-1]
     #print p_ins.name()
     #print appname
     if p_ins.children(recursive=True):
         children_list = str(p_ins.children(recursive=True))
     else:
 		children_list = None
-    message = {'ip':ip,'pstatus':pstatus,'metric_name':'app_monitor','its':its,'pid':pid,'physical_mem':physical_mem,'memory_used':memory_used,'memory_percent':memory_percent,'cpu_count':cpu_count,'cpu_percent':cpu_percent,'num_fds':num_fds,'connections_num':connections_num,'appname':appname,'children':children_list}
-    return message 
+    message = {'ip':ip,'pstatus':pstatus,'metric_name':'app_monitor','its':its,'pid':pid,'physical_mem':physical_mem,'memory_used':memory_used,'memory_percent':memory_percent,
+               'cpu_count':cpu_count,'cpu_percent':cpu_percent,'num_fds':num_fds,'connections_num':connections_num,'appname':appname,'app_path':app_path,'children':children_list}
+    return message
 
-if __name__ == '__main__':
+def main( ):
     parser = _argparse()
-    cmd=command(parser.type)
-    if cmd is None:
-        sys.exit()
 
-    ##kafka的信息###
+    ##kafka info###
     kafka_host='kafka4metric.huya.com'
     kafka_port=7619
     topic='ops_metric'
@@ -114,18 +120,28 @@ if __name__ == '__main__':
     except:
         logging.error('Error create producer in kafka: {}'.format(traceback.format_exc()))
 
-    p = psutil.subprocess.Popen(cmd,shell=True,stdout=psutil.subprocess.PIPE)
-    java_pid_list = p.stdout.readlines()
+    java_pid_list = [ ]
+    for app_type in parser.type:
+        cmd = command(app_type)
+        p = psutil.subprocess.Popen(cmd,shell=True,stdout=psutil.subprocess.PIPE)
+        java_pid_list.extend(p.stdout.readlines())
+
     if not java_pid_list:
         sys.exit(0)
-    #print java_pid_list
     for pid in java_pid_list:
-        test_pid = int(pid.strip())
-        message=collect_status(test_pid)
+        pid=int(pid.strip())
+        message=collect_status(pid)
+        print message
         try:
             send_to_kafka(topic,message)
         except Exception as e:
             print e
     producer.flush()
+
+
+if __name__ == '__main__':
+    main()
+
+
 
 
