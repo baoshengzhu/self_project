@@ -6,7 +6,7 @@
 
 import logging
 from logging.handlers import RotatingFileHandler
-import subprocess
+import subprocess,commands
 
 from  psutil import Process
 import psutil
@@ -46,14 +46,28 @@ def send_to_kafka(topic,message):
     except:
         logging.error('Error create producer in kafka: {}'.format(traceback.format_exc()))
 
-def get_host_ip():
+#get the host ip and server id
+def get_host_info():
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(('8.8.8.8', 80))
-        ip = s.getsockname()[0]
-    finally:
-        s.close()
-    return ip
+        ip_inner = ''
+        ip_out = ''
+        host_ = subprocess.check_output(" cat /home/dspeak/yyms/hostinfo ", shell=True)
+        host = host_.decode('utf-8').strip()
+        host_info = json.loads(host)
+        ips = host_info['ips']
+        serverid = host_info['server_id']
+        for item in ips:
+            if item['isp'] == 10:
+                ip_inner = item['ip']
+            elif item['isp'] == 6:
+                ip_out = item['ip']  # BGPip
+            elif item['isp'] == 4:
+                ip_out = item['ip']  # telecom ip
+    except:
+        ip_inner = commands.getoutput(" /sbin/ifconfig eth1 |sed -n 2p |awk -F'[ :]+' '{print $4}' ")
+        print (traceback.format_exc())
+    return ip_out, ip_inner, serverid
+
 
 #
 def _argparse():
@@ -73,7 +87,9 @@ def command(monitor_type):
     return cmd
 
 def collect_status(pid,site):
-    ip=get_host_ip()
+    ip_out=get_host_info()[0]
+    ip_inner=get_host_info()[1]
+    server_id=get_host_info()[2]
     physical_mem=psutil.virtual_memory().total/1024/1024  #Unit of M
     cpu_count=psutil.cpu_count()
     its=int(time.time())
@@ -104,7 +120,7 @@ def collect_status(pid,site):
         children_list = str(p_ins.children(recursive=True))
     else:
 		children_list = None
-    message = {'site':site,'ip':ip,'pstatus':pstatus,'metric_name':'app_monitor','its':its,'pid':pid,'physical_mem':physical_mem,'memory_used':memory_used,'memory_percent':memory_percent,
+    message = {'site':site,'ip':ip_out,'ip_inner':ip_inner,'server_id':server_id,'pstatus':pstatus,'metric_name':'app_monitor','its':its,'pid':pid,'physical_mem':physical_mem,'memory_used':memory_used,'memory_percent':memory_percent,
                'cpu_count':cpu_count,'cpu_percent':cpu_percent,'num_fds':num_fds,'connections_num':connections_num,'create_time':create_time,'appname':appname,'app_path':app_path,'children':children_list}
     return message
 
