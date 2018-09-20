@@ -63,6 +63,8 @@ def _argparse():
     parser = argparse.ArgumentParser(description='health checker for application')
     parser.add_argument('--type', action='store',nargs='+' ,dest='type', required=True,
                         help='Monitoring type')
+    parser.add_argument('--site', action='store',dest='site', required=True,
+                        help='platform type')
     return parser.parse_args()
 
 ##A string of shell commands to be executed for obtain process pid
@@ -70,13 +72,14 @@ def command(monitor_type):
     cmd = "ps -eaf|grep %s|grep -v grep |grep -v app_monitor|grep -v 'yy.com'|awk '{print $2}'"%(monitor_type)
     return cmd
 
-def collect_status(pid):
+def collect_status(pid,site):
     ip=get_host_ip()
-    physical_mem=psutil.virtual_memory().total
+    physical_mem=psutil.virtual_memory().total/1024/1024  #Unit of M
     cpu_count=psutil.cpu_count()
     its=int(time.time())
     p_ins=Process(pid)
     pstatus=p_ins.status()
+    create_time=time.strftime("%Y%m%d %H:%M:%S", time.localtime(p_ins.create_time()))
     memory_percent=p_ins.memory_percent()
     memory_used=memory_percent*physical_mem
     cpu_calc_list = [ ]
@@ -87,6 +90,7 @@ def collect_status(pid):
     num_fds=p_ins.num_fds()
     connections=p_ins.connections()
     connections_num=len(connections)
+
     #appname=p_ins.cwd()
     if p_ins.name() == 'jsvc':
         app_path=p_ins.exe().split('/')[:-2]
@@ -100,26 +104,23 @@ def collect_status(pid):
         children_list = str(p_ins.children(recursive=True))
     else:
 		children_list = None
-    message = {'ip':ip,'pstatus':pstatus,'metric_name':'app_monitor','its':its,'pid':pid,'physical_mem':physical_mem,'memory_used':memory_used,'memory_percent':memory_percent,
-               'cpu_count':cpu_count,'cpu_percent':cpu_percent,'num_fds':num_fds,'connections_num':connections_num,'appname':appname,'app_path':app_path,'children':children_list}
+    message = {'site':site,'ip':ip,'pstatus':pstatus,'metric_name':'app_monitor','its':its,'pid':pid,'physical_mem':physical_mem,'memory_used':memory_used,'memory_percent':memory_percent,
+               'cpu_count':cpu_count,'cpu_percent':cpu_percent,'num_fds':num_fds,'connections_num':connections_num,'create_time':create_time,'appname':appname,'app_path':app_path,'children':children_list}
     return message
 
 if __name__ == '__main__':
 
     parser = _argparse()
-
+    site = parser.site
     ##kafka info###
-    kafka_host='kafka4metric.huya.com'
-    kafka_port=7619
+    kafka_host='kafka4ops.huya.com'
+    kafka_port=6399
+	#kafka_host='kafka4metric.huya.com'
+    #kafka_port=7619
     topic='ops_metric'
     #kafka_host='10.64.42.217'
     #kafka_port=9092
     #topic='test-user-event-data'
-
-    try:
-        producer = KafkaProducer(bootstrap_servers=['{kafka_host}:{kafka_port}'.format(kafka_host=kafka_host,kafka_port=kafka_port)])
-    except:
-        logging.error('Error create producer in kafka: {}'.format(traceback.format_exc()))
 
     java_pid_list = [ ]
     for app_type in parser.type:
@@ -129,13 +130,7 @@ if __name__ == '__main__':
 
     if not java_pid_list:
         sys.exit(0)
-    ##kafka info###
-    kafka_host='kafka4metric.huya.com'
-    kafka_port=7619
-    topic='ops_metric'
-    #kafka_host='10.64.42.217'
-    #kafka_port=9092
-    #topic='test-user-event-data'
+
 
     try:
         producer = KafkaProducer(bootstrap_servers=['{kafka_host}:{kafka_port}'.format(kafka_host=kafka_host,kafka_port=kafka_port)])
@@ -145,7 +140,7 @@ if __name__ == '__main__':
     for pid in java_pid_list:
         pid=int(pid.strip())
         try:
-            message=collect_status(pid)
+            message=collect_status(pid,site)
             print message
         except:
             logging.error('Error from collect_status: {}'.format(traceback.format_exc()))
