@@ -77,16 +77,23 @@ def _argparse():
     parser = argparse.ArgumentParser(description='health checker for application')
     parser.add_argument('--type', action='store',nargs='+' ,dest='type', required=True,
                         help='Monitoring type')
-    parser.add_argument('--site', action='store',dest='site', required=True,
+    parser.add_argument('--site', action='store',dest='site',choices=('video','live'),required=True,
                         help='platform type')
     return parser.parse_args()
 
+
 ##A string of shell commands to be executed for obtain process pid
-def command(monitor_type):
+def get_pid_command(monitor_type):
     cmd = "ps -eaf|grep %s|grep -v grep |grep -v app_monitor|grep -v 'yy.com'|awk '{print $2}'"%(monitor_type)
     return cmd
 
-def collect_status(pid,site):
+def get_appname_command(pid):
+    cmd = "ps -eaf|grep -v grep |grep %s |awk -F '-DappName=' '{print $2}'|awk '{print $1}'"%(pid)
+    appname = psutil.subprocess.Popen(cmd,shell=True,stdout=psutil.subprocess.PIPE).stdout.read().strip()
+    return appname
+
+
+def collect_status(pid,appname,site):
     ip_out=get_host_info()[0]
     ip_inner=get_host_info()[1]
     server_id=get_host_info()[2]
@@ -113,13 +120,12 @@ def collect_status(pid,site):
     else:
         app_path=p_ins.cwd()
 
-    appname = app_path.split('/')[-1]
-    #print p_ins.name()
-    #print appname
+    #appname = app_path.split('/')[-1]
+    appname = appname
     if p_ins.children(recursive=True):
         children_list = str(p_ins.children(recursive=True))
     else:
-		children_list = None
+        children_list = None
     message = {'site':site,'ip':ip_out,'ip_inner':ip_inner,'server_id':server_id,'pstatus':pstatus,'metric_name':'app_monitor','its':its,'pid':pid,'physical_mem':physical_mem,'memory_used':memory_used,'memory_percent':memory_percent,
                'cpu_count':cpu_count,'cpu_percent':cpu_percent,'num_fds':num_fds,'connections_num':connections_num,'create_time':create_time,'appname':appname,'app_path':app_path,'children':children_list}
     return message
@@ -131,7 +137,7 @@ if __name__ == '__main__':
     ##kafka info###
     kafka_host='kafka4ops.huya.com'
     kafka_port=6399
-	#kafka_host='kafka4metric.huya.com'
+    #kafka_host='kafka4metric.huya.com'
     #kafka_port=7619
     topic='ops_metric'
     #kafka_host='10.64.42.217'
@@ -140,9 +146,10 @@ if __name__ == '__main__':
 
     java_pid_list = [ ]
     for app_type in parser.type:
-        cmd = command(app_type)
-        p = psutil.subprocess.Popen(cmd,shell=True,stdout=psutil.subprocess.PIPE)
-        java_pid_list.extend(p.stdout.readlines())
+        get_pid_command = get_pid_command(app_type)
+        pidobject = psutil.subprocess.Popen(get_pid_command,shell=True,stdout=psutil.subprocess.PIPE)
+        java_pid_list.extend(pidobject.stdout.readlines())
+
 
     if not java_pid_list:
         sys.exit(0)
@@ -155,14 +162,16 @@ if __name__ == '__main__':
 
     for pid in java_pid_list:
         pid=int(pid.strip())
+        appname = get_appname_command(pid)
+        print(pid,appname,site)
         try:
-            message=collect_status(pid,site)
-            print message
+            message = collect_status(pid,appname,site)
+            print(message)
         except:
             logging.error('Error from collect_status: {}'.format(traceback.format_exc()))
         try:
             send_to_kafka(topic,message)
+            #print("=--==")
         except Exception as e:
             print e
     producer.flush()
-
