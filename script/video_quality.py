@@ -53,12 +53,10 @@ def GetDataFromDB(TagType,MysqlHost, MysqlPort, MysqlDb, MysqlUser, MysqlPass, S
 if __name__ == "__main__":
 
     ##kafka的信息###
-    kafka_host='kafka4metric.huya.com'
-    kafka_port=7619
-    topic='ops_metric'
-    #kafka_host='10.64.42.217'
-    #kafka_port=9092
-    #topic='test-user-event-data'
+    kafka_host='xxx'
+    kafka_port=7dfdf9
+    topic='opddddc'
+  
 
 
     #数据库信息#
