@@ -135,13 +135,9 @@ if __name__ == '__main__':
     parser = _argparse()
     site = parser.site
     ##kafka info###
-    kafka_host='kafka4ops.huya.com'
+    kafka_host='192.168.1.1'
     kafka_port=6399
-    #kafka_host='kafka4metric.huya.com'
-    #kafka_port=7619
     topic='ops_metric'
-    #kafka_host='10.64.42.217'
-    #kafka_port=9092
     #topic='test-user-event-data'
 
     java_pid_list = [ ]
