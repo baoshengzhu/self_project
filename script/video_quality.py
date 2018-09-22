@@ -62,11 +62,11 @@ if __name__ == "__main__":
 
 
     #数据库信息#
-    MysqlHost = "10.64.35.215"
-    MysqlPort = 6470
-    MysqlUser = "hy_video_rw"
-    MysqlDb = "video_dw"
-    MysqlPass = "psgumD1nhn5vhV0J"
+    MysqlHost = "10.64.X.x"
+    MysqlPort = XXX
+    MysqlUser = "XXX"
+    MysqlDb = "XXXX"
+    MysqlPass = "XXXX"
 
     SqlInfo = { 
               "TranscodeQueue":"select count(*) from vhuya_encode_task where status=0;",
