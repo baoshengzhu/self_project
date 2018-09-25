@@ -136,7 +136,7 @@ if __name__ == '__main__':
     site = parser.site
     ##kafka info###
     kafka_host='192.168.1.1'
-    kafka_port=6399
+    kafka_port=639911111
     topic='ops_metric'
     #topic='test-user-event-data'
 
